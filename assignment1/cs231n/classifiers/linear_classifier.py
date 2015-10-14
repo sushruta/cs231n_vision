@@ -31,6 +31,8 @@ class LinearClassifier:
       if verbose and it % 100 == 0:
         print 'iteration %d / %d: loss %f' % (it, num_iters, loss)
 
+      loss_history.append(loss)
+
     return loss_history
 
   def predict(self, X):
