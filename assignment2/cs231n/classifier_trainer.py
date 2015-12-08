@@ -10,7 +10,7 @@ class ClassifierTrainer(object):
             model, loss_function, 
             reg=0.0,
             learning_rate=1e-2, momentum=0, learning_rate_decay=0.95,
-            update='momentum', sample_batches=True,
+            update='rmsprop', sample_batches=True,
             num_epochs=30, batch_size=100, acc_frequency=None,
             verbose=False):
     """
@@ -66,7 +66,8 @@ class ClassifierTrainer(object):
     train_acc_history = []
     val_acc_history = []
     for it in xrange(num_iters):
-      if it % 10 == 0:  print 'starting iteration ', it
+      if verbose:
+        if it % 10 == 0:  print 'starting iteration ', it
 
       # get batch of data
       if sample_batches:
@@ -90,30 +91,20 @@ class ClassifierTrainer(object):
         elif update == 'momentum':
           if not p in self.step_cache: 
             self.step_cache[p] = np.zeros(grads[p].shape)
-          dx = np.zeros_like(grads[p]) # you can remove this after
-          #####################################################################
-          # TODO: implement the momentum update formula and store the step    #
-          # update into variable dx. You should use the variable              #
-          # step_cache[p] and the momentum strength is stored in momentum.    #
-          # Don't forget to also update the step_cache[p].                    #
-          #####################################################################
-          pass
-          #####################################################################
-          #                      END OF YOUR CODE                             #
-          #####################################################################
+          self.step_cache[p] = momentum * self.step_cache[p] - learning_rate * grads[p]
+          dx = self.step_cache[p]
+          ##### Nesterov's Momentum ######
+          ## v_prev = self.step_cache[p]
+          ## self.step_cache[p] = momentum * self.step_cache[p] - learning_rate * grads[p]
+          ## dx = -momentum * v_prev + (1 + momentum) * self.step_cache[p]
         elif update == 'rmsprop':
           decay_rate = 0.99 # you could also make this an option
+          smoothing = 1e-8
           if not p in self.step_cache: 
             self.step_cache[p] = np.zeros(grads[p].shape)
-          dx = np.zeros_like(grads[p]) # you can remove this after
-          #####################################################################
-          # TODO: implement the RMSProp update and store the parameter update #
-          # dx. Don't forget to also update step_cache[p]. Use smoothing 1e-8 #
-          #####################################################################
-          pass
-          #####################################################################
-          #                      END OF YOUR CODE                             #
-          #####################################################################
+          grad_square = grads[p] ** 2
+          self.step_cache[p] = decay_rate * self.step_cache[p] + (1 - decay_rate) * grad_square
+          dx = -learning_rate * grads[p] / np.sqrt(self.step_cache[p] + smoothing)
         else:
           raise ValueError('Unrecognized update type "%s"' % update)
 
@@ -158,8 +149,8 @@ class ClassifierTrainer(object):
             best_model[p] = model[p].copy()
 
         # print progress if needed
-        if verbose:
-          print ('Finished epoch %d / %d: cost %f, train: %f, val %f, lr %e'
+        #if verbose:
+        print ('Finished epoch %d / %d: cost %f, train: %f, val %f, lr %e'
                  % (epoch, num_epochs, cost, train_acc, val_acc, learning_rate))
 
     if verbose:
