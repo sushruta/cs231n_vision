@@ -18,14 +18,9 @@ def affine_forward(x, w, b):
   - cache: (x, w, b)
   """
   out = None
-  #############################################################################
-  # TODO: Implement the affine forward pass. Store the result in out. You     #
-  # will need to reshape the input into rows.                                 #
-  #############################################################################
-  pass
-  #############################################################################
-  #                             END OF YOUR CODE                              #
-  #############################################################################
+  x_shape = x.shape
+  x_reshaped = x.reshape(x_shape[0], np.prod(x_shape[1:]))
+  out = np.dot(x_reshaped, w) + b
   cache = (x, w, b)
   return out, cache
 
@@ -47,13 +42,15 @@ def affine_backward(dout, cache):
   """
   x, w, b = cache
   dx, dw, db = None, None, None
-  #############################################################################
-  # TODO: Implement the affine backward pass.                                 #
-  #############################################################################
-  pass
-  #############################################################################
-  #                             END OF YOUR CODE                              #
-  #############################################################################
+  
+  x_shape = x.shape
+  x_mutated = x.reshape(x_shape[0], np.prod(x_shape[1:]))
+
+  dx = np.dot(dout, w.T)
+  dw = np.dot(x_mutated.T, dout)
+  db = np.sum(dout, axis=0)
+
+  dx = dx.reshape(x_shape)
   return dx, dw, db
 
 
@@ -69,13 +66,7 @@ def relu_forward(x):
   - cache: x
   """
   out = None
-  #############################################################################
-  # TODO: Implement the ReLU forward pass.                                    #
-  #############################################################################
-  pass
-  #############################################################################
-  #                             END OF YOUR CODE                              #
-  #############################################################################
+  out = np.maximum(0.0, x)
   cache = x
   return out, cache
 
@@ -92,13 +83,8 @@ def relu_backward(dout, cache):
   - dx: Gradient with respect to x
   """
   dx, x = None, cache
-  #############################################################################
-  # TODO: Implement the ReLU backward pass.                                   #
-  #############################################################################
-  pass
-  #############################################################################
-  #                             END OF YOUR CODE                              #
-  #############################################################################
+  dx = dout
+  dout[x <= 0] = 0.0
   return dx
 
 
@@ -130,7 +116,29 @@ def conv_forward_naive(x, w, b, conv_param):
   # TODO: Implement the convolutional forward pass.                           #
   # Hint: you can use the function np.pad for padding.                        #
   #############################################################################
-  pass
+  N, C, H, W = x.shape
+  F, C, HH, WW = w.shape
+
+  stride = conv_param['stride']
+  pad = conv_param['pad']
+
+  Hc = 1 + (H + 2 * pad - HH) / stride
+  Wc = 1 + (H + 2 * pad - WW) / stride
+
+  ## pad all the images
+  xp = np.pad(x,
+        ((0, 0), (0, 0), (pad, pad), (pad, pad)),
+        mode='constant', constant_values=0)
+
+  out = np.random.randn(N, F, Hc, Wc)
+
+  hc, wc = (0, 0)
+  for i in xrange(N):
+    for j in xrange(F):
+      for hc in xrange(Hc):
+        for wc in xrange(Wc):
+          xs = xp[i, :, hc*stride:hc*stride+HH, wc*stride:wc*stride+WW]
+          out[i, j, hc, wc] = np.sum(xs * w[j,:,:,:]) + b[j]
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -155,7 +163,40 @@ def conv_backward_naive(dout, cache):
   #############################################################################
   # TODO: Implement the convolutional backward pass.                          #
   #############################################################################
-  pass
+  x, w, b, conv_param = cache
+  N, C, H, W = x.shape
+  F, C, HH, WW = w.shape
+  N, F, Hc, Wc = dout.shape
+  stride = conv_param['stride']
+
+  print(dout.shape)
+  print(x.shape)
+  print(w.shape)
+
+  #dout = np.pad(dout, ((0,0),(0,0),(1,1),(1,1)), mode='constant', constant_values=0)
+  xp = np.pad(x, ((0,0),(0,0),(1,1),(1,1)), mode='constant', constant_values=0)
+
+  db = np.array([np.sum(dout[:,i,:,:]) for i in xrange(F)])
+  dw = np.random.randn(F, C, HH, WW)
+  for f in xrange(F):
+    for c in xrange(C):
+      for hh in xrange(HH):
+        for ww in xrange(WW):
+          dw[f, c, hh, ww] = np.sum(dout[:, f, :, :] * xp[:, c, hh:H+hh:stride, ww:W+ww:stride])
+
+  dx = np.zeros(x.shape)
+  dx = np.pad(dx, ((0,0), (0,0), (1,1), (1,1)), mode='constant', constant_values=0)
+  for i in xrange(N):
+    for hh in xrange(HH):
+      for ww in xrange(WW):
+        whw = w[:, :, hh, ww].T
+        for hc in xrange(Hc):
+          for wc in xrange(Wc):
+            he = hc * stride + hh
+            wi = wc * stride + ww
+            dx[i, :, he, wi] += np.sum(whw * dout[i, :, hc, wc], axis=1)
+  
+  dx = dx[:, :, 1:-1, 1:-1]
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -177,11 +218,22 @@ def max_pool_forward_naive(x, pool_param):
   - out: Output data
   - cache: (x, pool_param)
   """
-  out = None
+  N, C, H, W = x.shape
+  pool_height = pool_param['pool_height']
+  pool_width = pool_param['pool_width']
+  stride = pool_param['stride']
+
+  Hc = (H - pool_height) / stride + 1
+  Wc = (W - pool_width) / stride + 1
+  out = np.random.randn(N, C, Hc, Wc)
   #############################################################################
   # TODO: Implement the max pooling forward pass                              #
   #############################################################################
-  pass
+  for i in xrange(N):
+    for c in xrange(C):
+      for hc in xrange(Hc):
+        for wc in xrange(Wc):
+          out[i, c, hc, wc] = np.max(x[i, c, hc:stride*hc+pool_height, wc:stride*wc+pool_width])
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -200,11 +252,29 @@ def max_pool_backward_naive(dout, cache):
   Returns:
   - dx: Gradient with respect to x
   """
-  dx = None
+  x, pool_params = cache
+  N, C, H, W = x.shape
+
+  pool_height = pool_params['pool_height']
+  pool_width = pool_params['pool_width']
+  stride = pool_params['stride']
+
+  Hc = (H - pool_height) / stride + 1
+  Wc = (W - pool_width) / stride + 1
+
+  dx = np.zeros(x.shape)
   #############################################################################
   # TODO: Implement the max pooling backward pass                             #
   #############################################################################
-  pass
+  for i in xrange(N):
+    for c in xrange(C):
+      for hc in xrange(Hc):
+        for wc in xrange(Wc):
+          subx = x[i, c, hc:stride*hc+pool_height, wc:stride*wc+pool_width]
+          subdx = dx[i, c, hc:stride*hc+pool_height, wc:stride*wc+pool_width]
+          max_value = np.max(subx)
+          
+          subdx += (subx == max_value) * dout[i, c, hc, wc]
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
